@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using Unity.Entities;
 using UnityEngine;
 
 public class Graph : MonoBehaviour
@@ -88,21 +89,17 @@ public class Graph : MonoBehaviour
         }
     }
 
-    static bool skip = true;
-
     void Update()
     {
-        ApplyHookesLaw();
-        ApplyColombsLaw();
+        //ApplyHookesLaw();
+        //ApplyColombsLaw();
 
-        UpdateVelocity();
-        UpdatePosition();
+        //UpdateVelocity();
+        //UpdatePosition();
     }
-
 
     void ApplyHookesLaw()
     {
-
         foreach (var e in _edges)
         {
             Vector3 d = e.Body2.position - e.Body1.position;
@@ -115,32 +112,32 @@ public class Graph : MonoBehaviour
     }
 
     void ApplyColombsLaw()
-    {    
-        int nodeCount = _nodes.Count;
+    {
+        //int nodeCount = _nodes.Count;
 
-        for (int i = 0; i < nodeCount; ++i)
-        {
-            for (int j = i; j < nodeCount; ++j)
-            {
-                if (i == j)
-                    continue;
+        //for (int i = 0; i < nodeCount; ++i)
+        //{
+        //    for (int j = i; j < nodeCount; ++j)
+        //    {
+        //        if (i == j)
+        //            continue;
 
-                var n1 = _nodes[i];
-                var n2 = _nodes[j];
+        //        var n1 = _nodes[i];
+        //        var n2 = _nodes[j];
 
-                Vector3 d = n1.position - n2.position;
-                float distance = d.magnitude + 0.001f;
-                Vector3 direction = d.normalized;
+        //        Vector3 d = n1.position - n2.position;
+        //        float distance = d.magnitude + 0.001f;
+        //        Vector3 direction = d.normalized;
 
-                if (distance < 115)
-                {
-                    var force = (direction * repulsion) / (distance * distance * 0.5f);
+        //        if (distance < 115)
+        //        {
+        //            var force = (direction * repulsion) / (distance * distance * 0.5f);
 
-                    n1.AddForce(force);
-                    n2.AddForce(-force);
-                }
-            }
-        }
+        //            n1.AddForce(force);
+        //            n2.AddForce(-force);
+        //        }
+        //    }
+        //}
     }
 
     void UpdateVelocity()
@@ -149,11 +146,11 @@ public class Graph : MonoBehaviour
         {
             Node n = _nodes[i];
             n.vel = (n.vel + n.acc * Time.deltaTime) * _damping;
-            if (float.IsNaN(n.pos.x))
-            {
-                print("BLAM2");
-            }
-            n.acc = new Vector3();
+            //if (float.IsNaN(n.pos.x))
+            //{
+            //    print("BLAM2");
+            //}
+            n.acc.Set(0, 0, 0);
         }
     }
 
@@ -172,14 +169,15 @@ public class Graph : MonoBehaviour
 
             // project the node's position onto a sphere
             Vector3 pos = n.pos;
-            pos.z = _sphereRadius;
-            n.transform.localPosition = pos.normalized * _sphereRadius;
+            n.transform.position = pos;
+            //pos.z = _sphereRadius;
+            //n.transform.localPosition = pos.normalized * _sphereRadius;
         }
     }
 
     Node CreateRandomNode()
     {
-        var pos = UnityEngine.Random.insideUnitSphere * 20;         
+        var pos = UnityEngine.Random.insideUnitSphere * 20;
         pos.z = 0;
 
         GameObject obj = (GameObject)Instantiate(_nodePrefab, pos, Quaternion.identity, transform);
@@ -204,5 +202,81 @@ public class Graph : MonoBehaviour
         var render = edge.GetComponent<EdgeRenderer>();
         render.Body1 = n1.transform;
         render.Body2 = n2.transform;
+    }
+}
+
+class GraphLayoutSystem : ComponentSystem
+{
+    struct Components {
+        public Node node;
+    }
+
+    struct Components2
+    {
+        public Node node;
+        public Transform transform;
+    }
+
+    struct EdgeRendererFilter {
+        public EdgeRenderer edgeRenderer;
+    }
+
+
+    protected override void OnUpdate()
+    {
+        float repulsion = 3f;
+        float _damping = 0.00075f;
+
+
+        var nodes = Entities.WithAll<Node>().ToEntityQuery().ToComponentArray<Node>();
+
+        //Entities.ForEach((Entity e, ref Node n) =>
+        //{
+
+        //});
+
+
+
+        //foreach (var n1 in ents)
+        //{
+        //    foreach (var n2 in ents)
+        //    {
+        //        if (n1.node.pos == n2.node.pos)
+        //            continue;
+
+        //        Vector3 d = n1.node.pos - n2.node.pos;
+        //        float distance = d.magnitude + 0.001f;
+        //        Vector3 direction = d.normalized;
+
+        //        if (distance < 115)
+        //        {
+        //            var force = (direction * repulsion) / (distance * distance * 0.5f);
+
+        //            n1.node.AddForce(force);
+        //            n2.node.AddForce(-force);
+        //        }
+        //    }
+        //}
+
+        //foreach (var n in GetEntities<Components2>())
+        //{
+        //    n.node.vel = (n.node.vel + n.node.acc * Time.deltaTime) * _damping;
+        //    n.node.acc = new Vector3 {};
+
+        //    n.node.pos += n.node.vel * Time.deltaTime;
+
+        //    n.transform.position = n.node.pos;
+        //}
+
+        //foreach (var e in GetEntities<EdgeRendererFilter>())
+        //{
+        //    var points = new Vector3[2] { e.edgeRenderer.Body1.position, e.edgeRenderer.Body2.position };
+        //    e.edgeRenderer._lineRenderer.SetPositions(points);
+
+
+        //}
+
+
+
     }
 }
