@@ -30,7 +30,7 @@ public class Node : MonoBehaviour
     {
         var data = new NodeECS { pos = transform.position, acc = this.acc, vel = this.vel };
         dstManager.AddComponentData(entity, data);
-        GetComponent<MeshRenderer>().enabled = false;
+        //GetComponent<MeshRenderer>().enabled = false;
     }
 }
 

@@ -35,25 +35,35 @@ public class Graph : MonoBehaviour
     void Start()
     {
         Camera.main.useOcclusionCulling = false;
-        TestLoadGraph();
+        StartCoroutine(TestLoadGraph());
         var gls = World.Active.GetExistingSystem<GraphLayoutSystem>();
         gls.Enabled = enableLayoutSystem;
         gls.repulsion = repulsion;
         gls._damping = _damping;
         gls.forceScale = forceScale;
 
-        // Chunk'd job system isn't comparing all entities with each other, so leave it disabled
-        World.Active.GetExistingSystem<GraphLayoutSystem_JobChunk>().Enabled = false;
+        var gls_job = World.Active.GetExistingSystem<GraphLayoutSystem_JobChunk>();
+        gls_job.Enabled = !enableLayoutSystem;
+        gls_job.repulsion = repulsion;
+        gls_job._damping = _damping;
+        gls_job.forceScale = forceScale;
+
     }
 
-    void TestLoadGraph()
+    IEnumerator TestLoadGraph()
     {
+        var nodePrefab = GameObjectConversionUtility.ConvertGameObjectHierarchy(_nodePrefab, World.Active);
         var nodeLookup = new Dictionary<string, Node>();
 
         var sr = new System.IO.StringReader(_dataFile.text);
-
+        var count = 20;
         while (true)
         {
+            if (--count <= 0)
+            {
+                count = 20;
+                yield return null;
+            }
             var line = sr.ReadLine();
             if (line == null)
                 break;
@@ -65,16 +75,17 @@ public class Graph : MonoBehaviour
 
                 if (!nodeLookup.ContainsKey(n1tok))
                 {
-                    nodeLookup[n1tok] = CreateRandomNode();
+                    nodeLookup[n1tok] = CreateRandomNode(nodePrefab);
                 }
                 if (!nodeLookup.ContainsKey(n2tok))
                 {
-                    nodeLookup[n2tok] = CreateRandomNode();
+                    nodeLookup[n2tok] = CreateRandomNode(nodePrefab);
                 }
 
                 CreateEdge(nodeLookup[n1tok], nodeLookup[n2tok]);
             }
-            if (_nodes.Count >= _maxGraphSize)
+            if (World.Active.EntityManager.GetAllEntities().Length >= _maxGraphSize)
+            //if (_nodes.Count >= _maxGraphSize)
                 break;
         }
 
@@ -86,7 +97,7 @@ public class Graph : MonoBehaviour
         // create some nodes
         for (int i = 0; i < _maxGraphSize; ++i)
         {
-            CreateRandomNode();
+            CreateRandomNode(default);
         }
 
         for (int i = 0; i < _maxGraphSize / 5; ++i)
@@ -186,23 +197,29 @@ public class Graph : MonoBehaviour
         }
     }
 
-    Node CreateRandomNode()
+    Node CreateRandomNode(Entity nodePrefab)
     {
         var pos = UnityEngine.Random.insideUnitSphere * _sphereRadius;
         pos.z = 0;
 
-        GameObject obj = (GameObject)Instantiate(_nodePrefab, pos, Quaternion.identity, transform);
-        obj.transform.SetAsFirstSibling();
-        Node n = obj.GetComponent<Node>();
-        n.pos = pos;
-        n.acc = new Vector3();
-        n.vel = new Vector3();
-        _nodes.Add(n);
-        return n;
+        EntityManager entityManager = World.Active.EntityManager;
+        var ent = entityManager.Instantiate(nodePrefab);
+        entityManager.SetComponentData(ent, new Unity.Transforms.Translation { Value = pos });
+        entityManager.SetComponentData(ent, new NodeECS { pos = pos });
+        //GameObject obj = (GameObject)Instantiate(_nodePrefab, pos, Quaternion.identity, transform);
+        //obj.transform.SetAsFirstSibling();
+        //Node n = obj.GetComponent<Node>();
+        //n.pos = pos;
+        //n.acc = new Vector3();
+        //n.vel = new Vector3();
+        //_nodes.Add(n);
+        return null;
     }
 
     void CreateEdge(Node n1, Node n2)
     {
+        return; // temporarily disabled
+
         GameObject edge = (GameObject)Instantiate(_edgePrefab, transform);
         var spring = edge.GetComponent<Edge>();
         spring.Body1 = n1;

@@ -12,86 +12,131 @@ using UnityEngine;
 public class GraphLayoutSystem_JobChunk : JobComponentSystem
 {
     EntityQuery m_Group;
+    JobHandle m_lastjob;
 
     public float repulsion = 3f;
     public float _damping = 0.075f;
     public float forceScale = 10000;
+    private NativeArray<NodeECS> scratchStorage;
+    private NativeArray<float3> forcesBuffer;
+
+    //[NativeDisableParallelForRestriction]
+    //private BufferFromEntity<Forces> entityForces;
 
     protected override void OnCreate()
     {
         // Cached access to a set of ComponentData based on a specific query
         m_Group = GetEntityQuery(typeof(Translation), typeof(NodeECS));
+        // scratchStorage = new NativeArray<NodeECS>(0, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
+        RequireForUpdate(m_Group);
+    }
+
+    [BurstCompile]
+    struct GatherNodesJob : IJobForEachWithEntity<NodeECS>
+    {
+        public NativeArray<NodeECS> scratch;
+
+        public void Execute(Entity entity, int index, [ReadOnly] ref NodeECS c0)
+        {
+            scratch[index] = c0;
+        }
     }
 
     // Use the [BurstCompile] attribute to compile a job with Burst. You may see significant speed ups, so try it!
-    //[BurstCompile]
-    struct RotationSpeedJob : IJobChunk
+    [BurstCompile]
+    struct RotationSpeedJob : IJobForEachWithEntity<NodeECS>
     {
         public float DeltaTime;
-        public ArchetypeChunkComponentType<Translation> TranslationType;
-        public ArchetypeChunkComponentType<NodeECS> NodeECSType;
         public float repulsion;
-        public float _damping;
         public float forceScale;
+        [DeallocateOnJobCompletion] [ReadOnly] public NativeArray<NodeECS> scratch;
+        public NativeArray<float3> forceBuffer;
 
-        public void Execute(ArchetypeChunk chunk, int chunkIndex, int firstEntityIndex)
+        public void Execute(Entity entity, int index, [ReadOnly] ref NodeECS node)
         {
-            var chunkTranslations = chunk.GetNativeArray(TranslationType);
-            var chunkNodes = chunk.GetNativeArray(NodeECSType);
-            for (var i = 0; i < chunk.Count; i++)
+            for (var j = 0; j < scratch.Length; j++)
             {
-                var n1 = chunkNodes[i];
-                for (var j = i + 1; j < chunk.Count; j++)
+                if (j == index)
+                    continue;
+
+                var n2 = scratch[j];
+
+                float3 d = node.pos - n2.pos;
+                float distance = math.length(d) + 0.01f;
+                float3 direction = math.normalize(d);
+
+                if (distance < 115)
                 {
-                    var n2 = chunkNodes[j];
-
-                    float3 d = n1.pos - n2.pos;
-                    float distance = math.length(d) + 0.001f;
-                    float3 direction = math.normalize(d);
-
-                    if (distance < 115)
-                    {
-                        var force = (direction * repulsion) / (distance * distance * 0.5f);
-                        force *= forceScale;
-                        n1.acc += force;
-                        n2.acc -= force;
-                    }
+                    //var dir = math.select(1, -1, j < index);
+                    var force = (direction * repulsion) / (distance * distance * 0.5f);
+                    force *= forceScale;
+                    //force *= dir;
+                    forceBuffer[index] = force + forceBuffer[index];
                 }
-
             }
 
-            for (var i = 0; i < chunk.Count; i++)
+        }
+    }
+
+    [BurstCompile]
+    struct ApplyMotionJob : IJobForEachWithEntity<Translation, NodeECS>
+    {
+        [DeallocateOnJobCompletion] [ReadOnly] public NativeArray<float3> scratch;
+        public float DeltaTime;
+        public float damping;
+
+        public void Execute(Entity entity, int index, ref Translation c0, ref NodeECS c1)
+        {
+            var f = scratch[index];
+            float3 forceSum = f;
+            c1.acc += forceSum;
+            c1 = new NodeECS
             {
-                var n = chunkNodes[i];
-                n.vel = (n.vel + n.acc * DeltaTime) * _damping;
-                n.acc = new float3 { };
-
-                n.pos += math.up() * DeltaTime;
-
-                chunkTranslations[i] = new Translation { Value = n.pos };
-            }
+                vel = (c1.vel + c1.acc * DeltaTime) * damping,
+                acc = new float3(),
+                pos = c1.pos + c1.vel * DeltaTime
+            };
+            c0 = new Translation { Value = c1.pos };
         }
     }
 
     // OnUpdate runs on the main thread.
     protected override JobHandle OnUpdate(JobHandle inputDependencies)
     {
+        m_lastjob.Complete();
         // Explicitly declare:
         // - Read-Write access to Rotation
         // - Read-Only access to RotationSpeed_IJobChunk
-        var translationType = GetArchetypeChunkComponentType<Translation>();
-        var nodeECSType = GetArchetypeChunkComponentType<NodeECS>();
+        //var translationType = GetArchetypeChunkComponentType<Translation>();
+        //var nodeECSType = GetArchetypeChunkComponentType<NodeECS>();
+        scratchStorage = new NativeArray<NodeECS>(m_Group.CalculateLength(), Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
+        forcesBuffer = new NativeArray<float3>(m_Group.CalculateLength(), Allocator.TempJob);
 
+        //entityForces = GetBufferFromEntity<Forces>();
         var job = new RotationSpeedJob()
         {
-            TranslationType = translationType,
-            NodeECSType = nodeECSType,
+            //EntityType = GetArchetypeChunkEntityType(),
+            //NodeECSType = nodeECSType,
             DeltaTime = Time.deltaTime,
             forceScale = forceScale,
             repulsion = repulsion,
-            _damping = _damping
+            scratch = scratchStorage,
+            forceBuffer = forcesBuffer
         };
 
-        return job.Schedule(m_Group, inputDependencies);
+        var gatherJob = new GatherNodesJob() { scratch = scratchStorage };
+        var applyMotionJob = new ApplyMotionJob() { DeltaTime = Time.deltaTime, damping = _damping, scratch = forcesBuffer};
+
+        var gatherJobHandle = gatherJob.Schedule(m_Group, inputDependencies);
+        var jobHandle = job.Schedule(m_Group, gatherJobHandle);
+        var applyMotionJobHandle = applyMotionJob.Schedule(m_Group, jobHandle);
+        //m_Group.AddDependency(applyMotionJobHandle);
+        m_lastjob = applyMotionJobHandle;
+        return applyMotionJobHandle;
+    }
+
+    private struct Forces : IBufferElementData
+    {
+        public float3 Value;
     }
 }
