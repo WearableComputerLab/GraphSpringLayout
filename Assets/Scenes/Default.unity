@@ -150,7 +150,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _dataFile: {fileID: 4900000, guid: c7c43c1e2d4fa41dcbf3b7889ee607a7, type: 3}
-  _maxGraphSize: 30000
+  _maxGraphSize: 200
   _nodePrefab: {fileID: 1159219970018592, guid: ff469b1b92b8d4a19b6b39799933675d,
     type: 3}
   _edgePrefab: {fileID: 1145322062314400, guid: 0b19d8ed15f9e419d960814305523ba9,
@@ -161,6 +161,8 @@ MonoBehaviour:
   springk: 0.5
   _sphereProjectionCentre: {x: 0, y: 0, z: 0}
   _sphereRadius: 30
+  enableLayoutSystem: 1
+  forceScale: 10000
 --- !u!4 &260727393
 Transform:
   m_ObjectHideFlags: 0

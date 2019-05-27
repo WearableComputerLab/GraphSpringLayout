@@ -29,10 +29,21 @@ public class Graph : MonoBehaviour
     List<Node> _nodes = new List<Node>();
     List<Edge> _edges = new List<Edge>();
 
+    [SerializeField] bool enableLayoutSystem = false;
+    [SerializeField] float forceScale = 10000f;
+
     void Start()
     {
         Camera.main.useOcclusionCulling = false;
         TestLoadGraph();
+        var gls = World.Active.GetExistingSystem<GraphLayoutSystem>();
+        gls.Enabled = enableLayoutSystem;
+        gls.repulsion = repulsion;
+        gls._damping = _damping;
+        gls.forceScale = forceScale;
+
+        // Chunk'd job system isn't comparing all entities with each other, so leave it disabled
+        World.Active.GetExistingSystem<GraphLayoutSystem_JobChunk>().Enabled = false;
     }
 
     void TestLoadGraph()
@@ -177,7 +188,7 @@ public class Graph : MonoBehaviour
 
     Node CreateRandomNode()
     {
-        var pos = UnityEngine.Random.insideUnitSphere * 20;
+        var pos = UnityEngine.Random.insideUnitSphere * _sphereRadius;
         pos.z = 0;
 
         GameObject obj = (GameObject)Instantiate(_nodePrefab, pos, Quaternion.identity, transform);
@@ -202,81 +213,5 @@ public class Graph : MonoBehaviour
         var render = edge.GetComponent<EdgeRenderer>();
         render.Body1 = n1.transform;
         render.Body2 = n2.transform;
-    }
-}
-
-class GraphLayoutSystem : ComponentSystem
-{
-    struct Components {
-        public Node node;
-    }
-
-    struct Components2
-    {
-        public Node node;
-        public Transform transform;
-    }
-
-    struct EdgeRendererFilter {
-        public EdgeRenderer edgeRenderer;
-    }
-
-
-    protected override void OnUpdate()
-    {
-        float repulsion = 3f;
-        float _damping = 0.00075f;
-
-
-        var nodes = Entities.WithAll<Node>().ToEntityQuery().ToComponentArray<Node>();
-
-        //Entities.ForEach((Entity e, ref Node n) =>
-        //{
-
-        //});
-
-
-
-        //foreach (var n1 in ents)
-        //{
-        //    foreach (var n2 in ents)
-        //    {
-        //        if (n1.node.pos == n2.node.pos)
-        //            continue;
-
-        //        Vector3 d = n1.node.pos - n2.node.pos;
-        //        float distance = d.magnitude + 0.001f;
-        //        Vector3 direction = d.normalized;
-
-        //        if (distance < 115)
-        //        {
-        //            var force = (direction * repulsion) / (distance * distance * 0.5f);
-
-        //            n1.node.AddForce(force);
-        //            n2.node.AddForce(-force);
-        //        }
-        //    }
-        //}
-
-        //foreach (var n in GetEntities<Components2>())
-        //{
-        //    n.node.vel = (n.node.vel + n.node.acc * Time.deltaTime) * _damping;
-        //    n.node.acc = new Vector3 {};
-
-        //    n.node.pos += n.node.vel * Time.deltaTime;
-
-        //    n.transform.position = n.node.pos;
-        //}
-
-        //foreach (var e in GetEntities<EdgeRendererFilter>())
-        //{
-        //    var points = new Vector3[2] { e.edgeRenderer.Body1.position, e.edgeRenderer.Body2.position };
-        //    e.edgeRenderer._lineRenderer.SetPositions(points);
-
-
-        //}
-
-
-
     }
 }
